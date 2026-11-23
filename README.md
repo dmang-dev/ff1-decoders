@@ -114,7 +114,11 @@ unset.
   here.
 - [Data Crystal](https://datacrystal.tcrf.net/wiki/Final_Fantasy) (the TCRF wiki's ROM
   and RAM maps for Final Fantasy).
-- The community map lists of the NES version, for the place names.
+- Andrew Church's map list of the NES version (achurch.org, `ff1-maps.html`), for the
+  names of the 61 town, castle and dungeon maps.
+- *Nintendo Power* vol. 17, pp. 75-76, for the element names of the revisited temple's
+  lower floors ("The Earth Floor", "The Fire Floor", "Floor Of Water", "Floor Of Wind").
+- [FCEUX](https://fceux.com/)'s default NES palette, for the colours `render` draws with.
 
 Every offset here was checked against the USA ROM; where these notes and the prior art
 disagree, the notes say what was observed.

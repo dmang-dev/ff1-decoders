@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,26 +7,42 @@ name = "ff1-decoders"
 version = "0.1.0"
 description = "Decoders for Final Fantasy (NES) ROM tables, RAM, saves and menu screens"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "dmang" }]
 requires-python = ">=3.11"
 dependencies = []
 keywords = ["final fantasy", "nes", "rom", "romhacking", "decoder"]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Games/Entertainment",
+    "Topic :: Software Development :: Libraries",
 ]
+
+[project.urls]
+Homepage = "https://github.com/dmang-dev/ff1-decoders"
+Repository = "https://github.com/dmang-dev/ff1-decoders"
+Issues = "https://github.com/dmang-dev/ff1-decoders/issues"
+
+[project.scripts]
+ff1-decoders = "ff1_decoders.__main__:main"
 
 [project.optional-dependencies]
 render = ["Pillow>=9"]
 test = ["pytest>=7", "Pillow>=9"]
 
 [tool.setuptools]
-packages = ["ff1_decoders"]
+packages = ["ff1_decoders", "ff1_decoders.data"]
 
 [tool.setuptools.package-data]
-ff1_decoders = ["data/*.toml"]
+"ff1_decoders.data" = ["*.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "ff1_decoders"]

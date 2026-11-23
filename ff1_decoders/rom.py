@@ -47,7 +47,7 @@ SHOP_KINDS = ("weapon", "armor", "white magic", "black magic", "clinic", "inn", 
 CATEGORIES = ("unknown", "dragon", "giant", "undead", "were", "water", "mage", "regen")
 ELEMENTS = ("status", "poison/stone", "time", "death", "fire", "ice", "bolt", "earth")
 
-# The 2C02 colours as FCEUX draws them, $00-$3F
+# The 2C02 colours as FCEUX (https://fceux.com/) draws them by default, $00-$3F
 NES_RGB = [int(h, 16) for h in (
     "747474 24188C 0000A8 44009C 8C0074 A80010 A40000 7C0800 402C00 004400 005000 003C14 "
     "183C5C 000000 000000 000000 BCBCBC 0070EC 2038EC 8000F0 BC00BC E40058 D82800 C84C0C "

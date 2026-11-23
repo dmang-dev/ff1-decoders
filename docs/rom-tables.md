@@ -155,7 +155,9 @@ change in play were tied to their events.
 ## Map names
 
 The ROM has no place-name text. The RAM map's `enums.location` names the 61 standard
-maps after the community map lists of the NES version; the ROM's tileset-per-map
+maps after Andrew Church's map list of the NES version (achurch.org,
+`ff1-maps.html`), with the revisited temple's B1-B4 element names from *Nintendo
+Power* vol. 17, pp. 75-76; the ROM's tileset-per-map
 table fixes which block each id belongs to (towns 0-7, castles 8-11, and so on), and
 floor numbers follow the stair warp table. `Rom` uses these names by default; pass
 `map_names=` to use your own.
