@@ -44,9 +44,11 @@ Not from the ROM:
 ## Install
 
 ```sh
-pip install .                 # the decoders (standard library only)
-pip install ".[render]"       # plus Pillow, for rendering maps to PNG
+pip install ff1-decoders              # the decoders (standard library only)
+pip install "ff1-decoders[render]"    # plus Pillow, for rendering maps to PNG
 ```
+
+From a checkout: `pip install .` (or `".[render]"`).
 
 Python 3.11 or newer.
 
@@ -96,6 +98,14 @@ FF1_ROM=path/to/ff1.nes pytest           # all tests
 
 The tests that need the game read its path from `FF1_ROM` and are skipped when it is
 unset.
+
+## Releasing
+
+CI runs the tests (without a ROM) on Python 3.11-3.13 and builds the package on every
+push. To release: bump `version` in `pyproject.toml` (and `ff1_decoders.__version__`),
+commit, then publish a GitHub release tagged `vX.Y.Z`. The publish workflow checks the
+tag against the version, builds, tests the built wheel and uploads it to PyPI through
+trusted publishing (no API token is stored).
 
 ## Docs
 
