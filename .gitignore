@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.venv/
+# never commit game data
+*.nes
+*.srm
+*.sav
+*.state
+*.png

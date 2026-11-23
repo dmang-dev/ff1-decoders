@@ -1,0 +1,541 @@
+# Final Fantasy (NES, USA) RAM map.
+#
+# Addresses started from the community disassembly and Data Crystal notes. Fields
+# marked verified = true were confirmed on the USA ROM (headerless CRC32 CEBD2A31) by
+# watching them change in play: walking, entering towns and castles, battles, level-ups,
+# shops, menus and the game's own STATUS screen, and then re-checked in situations the
+# first observation had not used (other maps, formations, bosses, the ship and canoe).
+# Fields without verified = true are leads: plausible, seen a few times, not confirmed.
+#
+# Regions: "wram" = NES internal RAM $0000-$07FF (the default when region is absent)
+#          "sram" = cartridge RAM $6000-$7FFF, given as an offset from $6000
+#                   (sram 0x100 is CPU $6100). Saves (.srm/.sav files) are this 8 KB.
+#
+# Field keys: addr, size (bytes, default 1, multi-byte values little-endian),
+# region, kind ("bytes" = a raw block, "text" = font codes), add (a constant to add
+# to the value), equals (the byte or hex string a screen test compares against),
+# verified, note.
+
+[meta]
+title = "Final Fantasy"
+platform = "nes"
+prg_crc32 = "CEBD2A31"
+
+[fields]
+ow_scroll_x  = { addr = 0x27, add = 7, verified = true, note = "overworld scroll X; +7 = player tile. +-1 per tile walked; a new game starts at 153,165" }
+ow_scroll_y  = { addr = 0x28, add = 7, verified = true, note = "overworld scroll Y; +7 = player tile" }
+sm_scroll_x  = { addr = 0x29, add = 7, verified = true, note = "town/dungeon scroll X; +7 = player tile, then & 0x3F (standard maps are 64x64 and wrap)" }
+sm_scroll_y  = { addr = 0x2A, add = 7, verified = true, note = "town/dungeon scroll Y; +7 = player tile, then & 0x3F" }
+# Standard maps are 64x64 and wrap: the player tile is (scroll + 7) mod 64. With +7 alone
+# a tile with x or y < 7 reads 64 too high (Coneria (5,1) reads (69,65)). The world map
+# masks with & 0xFF.
+move_ctr_x   = { addr = 0x35, verified = true, note = "pixels of the current step along x: RIGHT counts 1..15 then 0 as the tile changes at the step's end; LEFT changes the tile at the start and counts 15..1 then 0. The camera sits at tile * 16 + this counter" }
+move_ctr_y   = { addr = 0x36, verified = true, note = "pixels of the current step along y: DOWN 1..15 then 0 at the tile change; UP changes the tile first and counts 15..1" }
+mapflags     = { addr = 0x2D, verified = true, note = "bit 0 set while inside a standard (town/dungeon) map; 0 on the world map. Bit 1 also seen set in castles" }
+map_id       = { addr = 0x48, verified = true, note = "current standard map id (see enums.location); meaningless on the world map" }
+vehicle      = { addr = 0x42, verified = true, note = "1 on foot, 2 canoe, 4 ship, 8 airship (enums.vehicle). 255 before a game is started" }
+vehicle_next = { addr = 0x46, verified = true, note = "vehicle being moved onto (disassembly vehicle_next). Boarding the ship from land: $46 = 4 on the press frame, $42 follows 16 frames later when the step ends; leaving ship or canoe both change on the same frame. Equal to $42 whenever the party stands still" }
+canoe        = { addr = 0x12, region = "sram", verified = true, note = "1 once the game has given the canoe (has_canoe): the world map's river tiles can be crossed then. Not the CANOE item byte $6031" }
+gold         = { addr = 0x1C, size = 3, region = "sram", verified = true, note = "party gold, 24-bit LE. 400 at a new game" }
+
+# Screen modes, found from OAM and palette bytes: each screen parks unused sprites at
+# its own Y or attribute value, which is a more reliable signal than the 6502 stack.
+in_battle    = { addr = 0x2B0, equals = 0xF0, verified = true, note = "OAM sprite 44's Y. Only the battle code parks unused sprites at Y=$F0 (the field, menus and minimap use $F8), and battles draw sprites 0-27 and 52-63 only. True on every battle frame (random encounters, scripted fights, wipes, runs) and on no field frame. Also true for ~10 black frames either side of a battle" }
+dialog_open  = { addr = 0x2FE, equals = 0xD8, verified = true, note = "OAM sprite 63's attribute: the dialogue routine sets every unused entry to $D8, the field leaves $F8. True from the box's roll-down to its roll-up. Shop/inn/clinic windows and battle messages are other screens and read false. Would miss only with ~16 objects on screen" }
+battle_cursor = { addr = 0x200, size = 4, kind = "bytes", verified = true, note = "OAM sprite 0 (Y, tile, attr, X); only meaningful under in_battle. Tile $F0 with Y < $EF is the hand of a battle menu waiting for input: command box X 96 (Y 158 FIGHT, 174 MAGIC, 190 DRINK, 206 ITEM) or X 144 Y 158 (RUN), spell list X < 96 Y >= 150, enemy target Y < 150, a party member X >= 140 Y = 52 + 24 x slot. Hidden (Y $F0) on every animating and message frame. Outside battle the same tile is the START menu, name entry and title hand" }
+menu_open    = { addr = 0x3C0, size = 8, equals = "0f3001220f000130", verified = true, note = "BG palettes 0-1 in the palette buffer = the START menu's. True while the START menu (incl. STATUS) is up; false during the 55-frame fade-out and on every other screen tested" }
+facing       = { addr = 0x33, verified = true, note = "player facing on the field: 1 right, 2 left, 4 down, 8 up. A blocked press turns the player without moving. Reads 0 on the overworld right after a battle until the next move, and stale in battle" }
+shop_open    = { addr = 0x3C4, size = 12, equals = "0f0004300f000a300f000130", verified = true, note = "BG palettes 1-3 in the palette buffer = every shop screen's (weapon, armor, item, white/black magic, inn, clinic). True from ~70 frames after stepping on the door (the fade-in) until the B/Exit that leaves, including buy lists, Yes/No and 'Who will learn'" }
+joy          = { addr = 0x20, verified = true, note = "the pad as the game last read it (bit 3 UP etc.). The game reads the pad only while it takes input, so after a tap's release it reads 0 again exactly when the next press counts (waiting for 0 is late by at most 8 frames, never early). Not used in battle" }
+oam          = { addr = 0x200, size = 256, kind = "bytes", verified = true, note = "shadow OAM, 64 sprites (Y, tile, attr, X). Out of battle the hand cursor is the first sprite with tile $F0 and Y < $EF (sprite 24 in shops, 0 or 24 in the START menu)" }
+inroom       = { addr = 0x0D, verified = true, note = "$81 while the player stands inside a room (the inside of a building drawn on the town/castle map), $00 outside. A map object is drawn exactly when its flags byte (+1) bit 7 equals this byte's bit 7" }
+
+# Battle extras
+battle_char  = { addr = 0xB7A, region = "sram", note = "$6B7A: party slot (0-3) whose command is being entered; only meaningful under in_battle" }
+battle_result = { addr = 0xB86, region = "sram", note = "lead: $6B86, last battle's result, kept after it ends: 2 won, 3 ran, 1 wiped" }
+battle_formation = { addr = 0x6A, note = "lead: $7F against Garland, $7E against Bikke; random fights read 0, so maybe reused" }
+battle_heal_count = { addr = 0xBAF, region = "sram", note = "lead: $6BAF, battle copy of the HEAL count; drops at input time while $6039 drops when the round runs" }
+
+# Shops, menus and name entry
+shop_type    = { addr = 0x66, verified = true, note = "only under shop_open (shared with the menu's equip offset; stale after leaving): see enums.shop_type" }
+shop_box     = { addr = 0x54, verified = true, note = "low byte of the last text PPU address; under shop_open with the hand at X 40 it names the box: $0B Buy/Sell/Exit, $CB Buy/Exit (item shop), $C9 Yes/No or 'Gold OK?', $4B the 4-name list; $26 with the stock list open" }
+shop_item    = { addr = 0x30C, verified = true, note = "under shop_open: item id being bought (HEAL $19, TENT $16, CURE $B0, FIRE $B4); spells are $B0 + 8*(level-1) + slot-1" }
+shop_price   = { addr = 0x30E, size = 2, verified = true, note = "under shop_open: its price, as in the 'Gold OK?' box" }
+shop_spell   = { addr = 0x30B, verified = true, note = "magic shop: the value the spell gets in the magic block, its slot 1-8 (CURE 1, FIRE 5). The shop writes it to $6300+ (LDX $030A, LDA $030B, STA $6300,X)" }
+shop_flag    = { addr = 0x50, note = "lead: 1 on every shop screen seen, 0 elsewhere, $FF before a game" }
+shop_id      = { addr = 0x51, note = "lead: shop number + 1 (Coneria weapon 1, armor 11, white 21, black 31, clinic 41, inn 51, item 61); stale after leaving" }
+name_screen  = { addr = 0x3C0, size = 8, equals = "0f001630ffff0101", verified = true, note = "palette buffer on the party-creation and name-entry screens (the title reads 0f312930ffff0101)" }
+menu_cursor  = { addr = 0x62, verified = true, note = "cursor index. START main menu 0-4 (ITEM MAGIC WEAPON ARMOR STATUS); 2x2 character picker 0-3; ITEM list row*3+col; MAGIC level*4+slot; equip grid char*4+slot; shop boxes and stock list entry; name entry = letters typed (0-4)" }
+menu_count   = { addr = 0x63, verified = true, note = "entries in the open box: 5 START main menu; shops 3 Buy/Sell/Exit, 2 Buy/Exit or Yes/No, 4 names, N stock items; clinic = number of dead" }
+cursor_x     = { addr = 0x64, verified = true, note = "shops: hand X in pixels (40 boxes, 168 stock); name entry: grid column 0-9; equip screen: mode 0 EQUIP 1 TRADE 2 DROP" }
+cursor_y     = { addr = 0x65, verified = true, note = "shops: hand Y in pixels; name entry: grid row 0-6" }
+name_char    = { addr = 0x67, verified = true, note = "name entry / party creation: character being set up * $10. Class at $0300+$67, name being typed at $0302+$67 (4 bytes)" }
+item_box     = { addr = 0x300, size = 32, kind = "bytes", verified = true, note = "shared buffer: item ids listed by START>ITEM (held ids in id order, no orbs) or a shop's stock list; the equip screen's 16 slots; name entry's class/name records. Read only under the matching screen" }
+
+# Inventory blocks (one count byte per item id at sram 0x20 + id, see [inventory])
+key_items    = { addr = 0x21, size = 17, kind = "bytes", region = "sram", verified = true, note = "ids 1-17 LUTE CROWN CRYSTAL HERB KEY TNT ADAMANT SLAB RUBY ROD FLOATER CHIME TAIL CUBE BOTTLE OXYALE CANOE. The game sets has_canoe (sram 0x12) rather than 0x31" }
+orbs         = { addr = 0x32, size = 4, kind = "bytes", region = "sram", note = "lead: fire, water, air, earth; the altar code writes them (see the orb_* flags). Set by hand they light the START menu's orb box" }
+# Treasure boxes: sram 0x200 + box index, bit 2 = opened (bit 0 is the map object of the
+# same number, so mask). While a box's message is up, $45 = box index and $61 = item id.
+
+# Dialogue: decoded from the ROM (text.DialogueRom); FF1 has no decoded text in RAM.
+# text_ptr points at the $00 terminator of the shown string; it and the two guards stay
+# stale after the box closes, so read them only under dialog_open. No byte holds the
+# dialogue id: it lives in A/X and on the stack only.
+text_ptr     = { addr = 0x3E, size = 2, verified = true, note = "dialogue text pointer (CPU address in bank $0A)" }
+text_bank    = { addr = 0x57, verified = true, note = "PRG bank swapped in for the last text draw: $0A dialogue, $0E menu, $0C battle" }
+text_mode    = { addr = 0x37, verified = true, note = "$80 after a dialogue draw" }
+text_item    = { addr = 0x61, verified = true, note = "item id for the $02 'item name' code in a treasure box's text" }
+# Rejected leads:
+#   in_battle via the stack: $01FB-$01FC straddles two return addresses and misses
+#     dungeon battles; the EnterBattle return address moves down 7 bytes per stair level.
+#   $7E counts up in a box and back down after; nonzero in battle. $1C = encounter
+#     flash counter, $4B = music request, $57/$6BA7 stale after battle.
+
+[party]
+base = 0x100        # sram offset ($6100)
+stride = 0x40       # 64 bytes per character
+count = 4
+
+[party_fields]
+job    = { addr = 0x00, region = "sram", verified = true, note = "class id, see enums.job" }
+status = { addr = 0x01, region = "sram", verified = true, note = "field: enum 0 OK, 1 Dead, 2 Stone, 3 Poison (poison drains 1 HP a step, never below 1). Battle: bitmask, see enums.status_bits; converted on entry and back on exit. The party is re-sorted after a battle (OK, Poison, Stone, Dead), so slot != character" }
+name   = { addr = 0x02, size = 4, kind = "text", region = "sram", verified = true, note = "font codes (text.CHARS): ABCD reads 8A 8B 8C 8D" }
+exp    = { addr = 0x07, size = 3, region = "sram", verified = true }
+hp     = { addr = 0x0A, size = 2, region = "sram", verified = true }
+max_hp = { addr = 0x0C, size = 2, region = "sram", verified = true }
+str    = { addr = 0x10, region = "sram", verified = true, note = "STR..LUCK as on the STATUS screen" }
+agi    = { addr = 0x11, region = "sram", verified = true }
+int    = { addr = 0x12, region = "sram", verified = true }
+vit    = { addr = 0x13, region = "sram", verified = true }
+luck   = { addr = 0x14, region = "sram", verified = true }
+exp_next = { addr = 0x16, size = 2, region = "sram", verified = true, note = "EXP to next level, the STATUS screen's 'FOR LEV UP'" }
+damage = { addr = 0x20, region = "sram", verified = true, note = "DAMAGE..EVADE % as on the STATUS screen" }
+hit_pct = { addr = 0x21, region = "sram", verified = true }
+absorb = { addr = 0x22, region = "sram", verified = true }
+evade_pct = { addr = 0x23, region = "sram", verified = true }
+level  = { addr = 0x26, region = "sram", add = 1, verified = true, note = "zero-based on the field (L1 = 0). The battle code holds it one-based, then field-form again before level-ups show" }
+
+# Equipment and magic per character, same base/stride as [party] (char i at sram
+# $6100 + $40*i; the magic block is $200 further on, at $6300 + $40*i). Menus write
+# SRAM when they close: equipping shows on screen at once but the bytes change only
+# when B goes back to the main list.
+[party_gear]
+weapons = { addr = 0x18, size = 4, kind = "bytes", region = "sram", verified = true, note = "4 weapon slots, bit 7 = equipped. Weapon id n (bits 0-6) is ROM item n + $1B (text.WEAPON_ITEM0): id 2 Small[knife], 3 Wooden[staff], 4 Rapier" }
+armor   = { addr = 0x1C, size = 4, kind = "bytes", region = "sram", verified = true, note = "4 armor slots, bit 7 = equipped. Armor id n is ROM item n + $43 (text.ARMOR_ITEM0): id 1 Cloth, 3 Chain[armor]" }
+spells  = { addr = 0x200, size = 32, kind = "bytes", region = "sram", verified = true, note = "4 bytes per level x 8 levels; each nonzero byte is a learned spell's slot within its level, 1-8 (white 1-4, black 5-8): spell n = (level-1)*8 + value. At most 3 per level. Nothing but the magic shop writes a single spell byte" }
+mp      = { addr = 0x220, size = 8, kind = "bytes", region = "sram", verified = true, note = "current MP (spell charges) for L1..L8" }
+max_mp  = { addr = 0x228, size = 8, kind = "bytes", region = "sram", verified = true, note = "max MP for L1..L8" }
+
+# One count byte per item at sram $6020 + item id (enums.item). The item screen lists
+# key items above the consumables.
+[inventory]
+LUTE    = { addr = 0x21, region = "sram", verified = true }
+CROWN   = { addr = 0x22, region = "sram", verified = true }
+CRYSTAL = { addr = 0x23, region = "sram", verified = true }
+HERB    = { addr = 0x24, region = "sram", verified = true }
+KEY     = { addr = 0x25, region = "sram", verified = true }
+TNT     = { addr = 0x26, region = "sram", verified = true }
+ADAMANT = { addr = 0x27, region = "sram", verified = true }
+SLAB    = { addr = 0x28, region = "sram", verified = true }
+RUBY    = { addr = 0x29, region = "sram", verified = true }
+ROD     = { addr = 0x2a, region = "sram", verified = true }
+FLOATER = { addr = 0x2b, region = "sram", verified = true }
+CHIME   = { addr = 0x2c, region = "sram", verified = true }
+TAIL    = { addr = 0x2d, region = "sram", verified = true }
+CUBE    = { addr = 0x2e, region = "sram", verified = true }
+BOTTLE  = { addr = 0x2f, region = "sram", verified = true }
+OXYALE  = { addr = 0x30, region = "sram", verified = true }
+CANOE   = { addr = 0x12, region = "sram", verified = true, note = "the canoe as the game gives it (has_canoe). $6031 alone set makes START > ITEM list CANOE, but play never sets it" }
+TENT    = { addr = 0x36, region = "sram", verified = true }
+CABIN   = { addr = 0x37, region = "sram", verified = true }
+HOUSE   = { addr = 0x38, region = "sram", verified = true, note = "using it on SAVE? also writes the save copy at $6438" }
+HEAL    = { addr = 0x39, region = "sram", verified = true }
+PURE    = { addr = 0x3A, region = "sram", verified = true }
+SOFT    = { addr = 0x3B, region = "sram", verified = true }
+
+# Map objects (NPCs) and the current map
+[field_objects]
+npc_objects = { addr = 0xF00, size = 256, kind = "bytes", region = "sram", verified = true, note = "16 map objects x 16 bytes ($6F00, disassembly mapobj): +0 object id (0 = empty slot, see enums.object), +1 flags ($80 in a room, $40 never moves), +2/+3 tile x/y, +4/+5 where it is drawn (between tiles mid-step). Stale on the world map (it keeps the last town's table). The screen shows dx -7..+8 and dy -6..+7 tiles from the player" }
+map_tiles   = { addr = 0x1000, size = 4096, kind = "bytes", region = "sram", verified = true, note = "the current map's tile ids ($7000). World map: a ring of 16 rows x 256, the tile at (x,y) is +(y & 15)*256 + x; towns, castles, dungeons: 64x64, +y*64 + x" }
+tile_props  = { addr = 0x400, size = 256, kind = "bytes", verified = true, note = "the current map's tile property table, 2 bytes per tile id, copied from ROM bank 0: the world-map table (bank 0 +$0000) on the world map, the map's tileset (+$0800 + $100 * tileset) inside. World: byte 1 bit 7 = an entrance (low bits pick the place). Towns/castles: byte 0 & $C0 = $40 leads out, $80 stairs to another map (byte 1 = which), $C0 leaves to the world map; byte 0 & $1E = $02 is a door: a shop's when byte 1 is non-zero (shop number + 1), a room's when it is 0" }
+
+[enums.job]
+0 = "Fighter"
+1 = "Thief"
+2 = "Black Belt"
+3 = "Red Mage"
+4 = "White Mage"
+5 = "Black Mage"
+6 = "Knight"
+7 = "Ninja"
+8 = "Master"
+9 = "Red Wizard"
+10 = "White Wizard"
+11 = "Black Wizard"
+
+[enums.status]
+0 = "OK"
+1 = "Dead"
+2 = "Stone"
+3 = "Poison"
+
+# In-battle form. 0x08-0x40 are cleared on battle exit. The names are the game's own
+# battle labels, kept in bit order in the ROM at PRG 0x2CF00 (Stone and Poison are
+# drawn with icon tiles). 0x80 has no label there.
+[enums.status_bits]
+1 = "Dead"
+2 = "Stone"
+4 = "Poison"
+8 = "Dark"
+16 = "Stun"
+32 = "Asleep"
+64 = "Mute"
+
+[enums.vehicle]
+1 = "walking"
+2 = "canoe"
+4 = "ship"
+8 = "airship"
+
+# Item ids for sram 0x20 + id and item_box. 18-21 are the four ORBs (no menu name: the
+# START menu draws them as pictures). Shops use $1C+ weapons, $44+ armor, $B0+ spells.
+[enums.item]
+1 = "LUTE"
+2 = "CROWN"
+3 = "CRYSTAL"
+4 = "HERB"
+5 = "KEY"
+6 = "TNT"
+7 = "ADAMANT"
+8 = "SLAB"
+9 = "RUBY"
+10 = "ROD"
+11 = "FLOATER"
+12 = "CHIME"
+13 = "TAIL"
+14 = "CUBE"
+15 = "BOTTLE"
+16 = "OXYALE"
+17 = "CANOE"
+18 = "ORB (fire)"
+19 = "ORB (water)"
+20 = "ORB (air)"
+21 = "ORB (earth)"
+22 = "TENT"
+23 = "CABIN"
+24 = "HOUSE"
+25 = "HEAL"
+26 = "PURE"
+27 = "SOFT"
+
+[enums.shop_type]
+0 = "weapon"
+1 = "armor"
+2 = "white magic"
+3 = "black magic"
+4 = "clinic"
+5 = "inn"
+6 = "item"
+
+# Place names by map id (WRAM $48). The ROM has no place-name text; the names follow
+# the community map lists of the NES version, whose 61 maps match the ROM's 61 standard
+# maps. The ROM's per-map tileset table (PRG $2CC0; WRAM $49 is the current map's
+# tileset) fixes the blocks: 0-7 towns (tileset 0), 8-11 castles (1), 12 temple (5),
+# 13-14 29-36 60 the Earth/Volcano set (2), 15-21 37-39 caves (3), 22-23 27-28 40-41
+# Marsh/Mirage (4), 42-46 shrine (5), 47-51 sky (6), 52-59 the revisited temple (7).
+# Floor numbers follow the stair warp table (PRG $2D00 x, $2D40 y, $2D80 map): the
+# Sea Shrine's way in is 44, with stairs up to 45 and 46 (the top floor) and down to
+# 43 and 42; the Floating Castle chains 47 -> 51; the revisited temple's way in, 52,
+# leads to 53 -> 54 and to 55 -> 59.
+[enums.location]
+"0" = "Coneria"
+"1" = "Pravoka"
+"2" = "Elfland"
+"3" = "Melmond"
+"4" = "Crescent Lake"
+"5" = "Gaia"
+"6" = "Onrac"
+"7" = "Lefein"
+"8" = "Coneria Castle 1F"
+"9" = "Elven Castle"
+"10" = "Northwest Castle"
+"11" = "Castle of Ordeal 1F"
+"12" = "Temple of Fiends"
+"13" = "Earth Cave B1"
+"14" = "Gurgu Volcano B1"
+"15" = "Ice Cave B1"
+"16" = "Cardia Dragon Cave"
+"17" = "Bahamut's Cave B1"
+"18" = "Waterfall Cave"
+"19" = "Dwarf Cave"
+"20" = "Matoya's Cave"
+"21" = "Sarda's Cave"
+"22" = "Marsh Cave B1"
+"23" = "Mirage Tower 1F"
+"24" = "Coneria Castle 2F"
+"25" = "Castle of Ordeal 2F"
+"26" = "Castle of Ordeal 3F"
+"27" = "Marsh Cave B2"
+"28" = "Marsh Cave B3"
+"29" = "Earth Cave B2"
+"30" = "Earth Cave B3"
+"31" = "Earth Cave B4"
+"32" = "Earth Cave B5"
+"33" = "Gurgu Volcano B2"
+"34" = "Gurgu Volcano B3"
+"35" = "Gurgu Volcano B4"
+"36" = "Gurgu Volcano B5"
+"37" = "Ice Cave B2"
+"38" = "Ice Cave B3"
+"39" = "Bahamut's Cave B2"
+"40" = "Mirage Tower 2F"
+"41" = "Mirage Tower 3F"
+"42" = "Sea Shrine B2"
+"43" = "Sea Shrine B1"
+"44" = "Sea Shrine 1F"
+"45" = "Sea Shrine 2F"
+"46" = "Sea Shrine 3F"
+"47" = "Floating Castle 1F"
+"48" = "Floating Castle 2F"
+"49" = "Floating Castle 3F"
+"50" = "Floating Castle 4F"
+"51" = "Floating Castle 5F"
+"52" = "Temple of Fiends Revisited 1F"
+"53" = "Temple of Fiends Revisited 2F"
+"54" = "Temple of Fiends Revisited 3F"
+"55" = "Temple of Fiends Revisited B1 - Earth"
+"56" = "Temple of Fiends Revisited B2 - Fire"
+"57" = "Temple of Fiends Revisited B3 - Water"
+"58" = "Temple of Fiends Revisited B4 - Wind"
+"59" = "Temple of Fiends Revisited B5"
+"60" = "Titan's Pass"
+
+# Map objects by id ($6200 + id is the object's flag byte; the $6F00 slots' +0).
+# Named from their dialogue and the disassembly's talk handlers (docs/objects-and-flags.md).
+[enums.object]
+"0x01" = "King of Coneria"
+"0x02" = "Garland"
+"0x03" = "Princess (in the temple)"
+"0x04" = "Bikke the pirate"
+"0x05" = "Elf doctor"
+"0x06" = "Elf prince"
+"0x07" = "Astos"
+"0x08" = "Nerrick the dwarf"
+"0x09" = "Smyth the blacksmith"
+"0x0a" = "Matoya"
+"0x0b" = "Dr. Unne"
+"0x0c" = "Vampire"
+"0x0d" = "Sage Sarda"
+"0x0e" = "Bahamut"
+"0x10" = "Submarine engineer (Onrac)"
+"0x11" = "Robot (Sky Castle)"
+"0x12" = "Princess Sara (Coneria Castle)"
+"0x13" = "Fairy (from the BOTTLE)"
+"0x14" = "Titan"
+"0x15" = "Canoe sage (Crescent Lake)"
+"0x16" = "Stone plate (ROD)"
+"0x17" = "Stone plate (LUTE)"
+"0x18" = "Garland (2000 years ago)"
+"0x1a" = "Chaos"
+"0x1b" = "Lich, FIEND of Earth"
+"0x1c" = "Kary, FIEND of Fire"
+"0x1d" = "Kraken, FIEND of Water"
+"0x1e" = "Tiamat, FIEND of Air"
+"0x3a" = "Sky Warrior"
+"0x3b" = "Sky Warrior"
+"0x3c" = "Sky Warrior"
+"0x3d" = "Sky Warrior"
+"0x3e" = "Sky Warrior"
+"0xca" = "Black ORB (Temple of Fiends)"
+
+# Story flags, all in SRAM. A flag is an addr plus either bit (set = true; with
+# clear = true the game clears the bit to mark the event) or equals (a whole-byte
+# compare). sram $6200-$62FF is one byte per map object: bit 0 = the object is on its
+# map, bit 1 = its event done (bit 2 is a treasure box's opened bit, so these always
+# pick one bit). Read the live bytes: the save copy at 0x400+ is only written on save.
+# Evidence: "play" = observed to change in play; "rom" = the ROM's only write to the
+# byte is the one named.
+[flags.garland_defeated]
+addr = 0x202           # play: Garland's object disappears
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.princess_rescued]
+addr = 0x212           # play: she appears in Coneria Castle (0x203, her temple copy, clears)
+region = "sram"
+bit = 0
+verified = true
+
+[flags.bridge_built]
+addr = 0x08            # play: set while the King's dialogue is still open; bridge at 152,152
+region = "sram"
+equals = 1
+verified = true
+
+[flags.ship_obtained]
+addr = 0x00            # play: 0 -> 1; rom: the one INC $6000
+region = "sram"
+bit = 0
+verified = true
+
+[flags.canal_opened]
+addr = 0x0C            # play: 1 -> 0 (the canal's blocker leaves); rom: the one STA $600C
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.canoe_obtained]
+addr = 0x12            # play: 0 -> 1; rom: the one INC $6012
+region = "sram"
+bit = 0
+verified = true
+
+[flags.airship_obtained]
+addr = 0x04            # rom: the two INC $6004 (the raise and its scene)
+region = "sram"
+bit = 0
+verified = true
+
+[flags.orb_fire]
+addr = 0x32            # rom: the altar code's STA $6032
+region = "sram"
+bit = 0
+verified = true
+
+[flags.orb_water]
+addr = 0x33            # rom: STA $6033
+region = "sram"
+bit = 0
+verified = true
+
+[flags.orb_air]
+addr = 0x34            # rom: STA $6034
+region = "sram"
+bit = 0
+verified = true
+
+[flags.orb_earth]
+addr = 0x35            # play: 0 -> 1 after the FIEND of Earth; rom: STA $6035
+region = "sram"
+bit = 0
+verified = true
+
+[flags.pirates_beaten]
+addr = 0x204           # play: object $04's event bit 0 -> 1
+region = "sram"
+bit = 1
+verified = true
+
+[flags.sleeper_woken]
+addr = 0x206           # play: object $06's event bit 0 -> 1
+region = "sram"
+bit = 1
+verified = true
+
+[flags.thief_king_beaten]
+addr = 0x207           # play: object $07 leaves (1 -> 0)
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.canal_digger_gone]
+addr = 0x208           # play: object $08 leaves (1 -> 0)
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.smith_forged]
+addr = 0x209           # rom: object $09's event bit
+region = "sram"
+bit = 1
+verified = true
+
+[flags.scholar_taught]
+addr = 0x20B           # rom: object $0B's event bit
+region = "sram"
+bit = 1
+verified = true
+
+[flags.cave_boss_beaten]
+addr = 0x20C           # play: object $0C leaves (1 -> 0)
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.class_change]
+addr = 0x20E           # rom: object $0E's event bit
+region = "sram"
+bit = 1
+verified = true
+
+[flags.engineer_moved]
+addr = 0x210           # rom: object $10 leaves
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.fairy_freed]
+addr = 0x213           # rom: object $13 appears (0 at a new game)
+region = "sram"
+bit = 0
+verified = true
+
+[flags.tunnel_cleared]
+addr = 0x214           # play: object $14 leaves (1 -> 0)
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.rod_plate_used]
+addr = 0x216           # play: object $16 leaves (1 -> 0)
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.lute_plate_used]
+addr = 0x217           # rom: object $17 leaves
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.earth_fiend_beaten]
+addr = 0x21B           # play: object $1B leaves (1 -> 0) with the earth ORB lit
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.fire_fiend_beaten]
+addr = 0x21C           # rom: object $1C, the same kind of fight object as $1B
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.water_fiend_beaten]
+addr = 0x21D           # rom: object $1D
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+[flags.air_fiend_beaten]
+addr = 0x21E           # rom: object $1E
+region = "sram"
+bit = 0
+clear = true
+verified = true
+
+# Lead, not confirmed: sram 0x16 (bridgescene) = 0 at a new game, 1 on the bridge, 0x80
+# after the bridge-crossing prologue.
